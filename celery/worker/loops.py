@@ -69,10 +69,11 @@ def asynloop(obj, connection, consumer, blueprint, hub, qos,
 
     try:
         while blueprint.state == RUN and obj.connection:
-            state.maybe_shutdown()
 
             if state.worked_too_long():
                 state.safely_shutdown()
+
+            state.maybe_shutdown()
 
             # We only update QoS when there's no more messages to read.
             # This groups together qos calls, and makes sure that remote
@@ -106,10 +107,11 @@ def synloop(obj, connection, consumer, blueprint, hub, qos,
     obj.on_ready()
 
     while blueprint.state == RUN and obj.connection:
-        state.maybe_shutdown()
 
         if state.worked_too_long():
             state.safely_shutdown()
+
+        state.maybe_shutdown()
 
         if qos.prev != qos.value:
             qos.update()
