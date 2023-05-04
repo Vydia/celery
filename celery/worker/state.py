@@ -9,6 +9,7 @@ import shelve
 import sys
 import weakref
 import zlib
+from datetime import datetime, timedelta
 from collections import Counter
 
 from kombu.serialization import pickle, pickle_protocol
@@ -45,6 +46,9 @@ REVOKE_EXPIRES = 10800
 #: before being expired when the max limit has been exceeded.
 SUCCESSFUL_EXPIRES = 10800
 
+#: how many seconds we wait till we shutdown
+WORKED_TOO_LONG_THRESHOLD_SECONDS = os.getenv("CELERY_WORKED_TOO_LONG_THRESHOLD_SECONDS") or 600
+
 #: Mapping of reserved task_id->Request.
 requests = {}
 
@@ -69,6 +73,7 @@ revoked = LimitedSet(maxlen=REVOKES_MAX, expires=REVOKE_EXPIRES)
 
 should_stop = None
 should_terminate = None
+worker_started_at = datetime.now()
 
 
 def reset_state():
@@ -81,12 +86,27 @@ def reset_state():
     revoked.clear()
 
 
+def worked_too_long():
+    if WORKED_TOO_LONG_THRESHOLD_SECONDS:
+        time_ago = datetime.now() - timedelta(
+            seconds=WORKED_TOO_LONG_THRESHOLD_SECONDS
+        )
+        return worker_started_at < time_ago
+    else:
+        return False
+
+
 def maybe_shutdown():
     """Shutdown if flags have been set."""
     if should_terminate is not None and should_terminate is not False:
         raise WorkerTerminate(should_terminate)
     elif should_stop is not None and should_stop is not False:
         raise WorkerShutdown(should_stop)
+
+
+def safely_shutdown():
+    should_stop = True
+    should_terminate = False
 
 
 def task_reserved(request,
